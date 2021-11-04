@@ -1,0 +1,13 @@
+{
+  "name": "impression",
+  "version": "1.0.0",
+  "description": "Backend for advanced Notion usage",
+  "main": "index.js",
+  "repository": "https://github.com/LarsSelbekk/impression",
+  "author": "Lars Mitsem Selbekk <lars@selbekk.com>",
+  "license": "MIT",
+  "private": false,
+  "dependencies": {
+    "@notionhq/client": "^0.4.6"
+  }
+}
