@@ -10,7 +10,7 @@
   "scripts": {
     "start": "node index.js",
     "prestart": "yarn tsc",
-    "dev": "yarn concurrently \"yarn tsc -w\" \"nodemon index.js\"",
+    "dev": "yarn concurrently -i \"nodemon index.js\" \"yarn tsc -w\"",
     "predev": "yarn tsc"
   },
   "dependencies": {
