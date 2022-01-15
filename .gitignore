@@ -4,3 +4,6 @@ build/
 *.js.map
 .idea/
 *.tsbuildinfo
+/.config.json
+venv/
+*.log
