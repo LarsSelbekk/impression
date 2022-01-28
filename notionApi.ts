@@ -45,7 +45,9 @@ export async function generateEntry(generator: any, dueDate: string, newRecurren
             },
             "Repeat": {rich_text: []},
             "Recurrence ID": {rich_text: [{type: "text", text: {content: newRecurrenceId}}]}
-        }
+        },
+        icon: generator.icon,
+        cover: generator.cover,
     })
 }
 
