@@ -10,7 +10,7 @@
   "scripts": {
     "start": "node index.js",
     "prestart": "yarn tsc",
-    "dev": "yarn concurrently -i \"nodemon index.js\" \"yarn tsc -w\"",
+    "dev": "yarn concurrently -i \"nodemon -r source-map-support/register index.js\" \"yarn tsc -w\"",
     "predev": "yarn tsc"
   },
   "dependencies": {
@@ -19,6 +19,7 @@
   },
   "devDependencies": {
     "nodemon": "^2.0.14",
+    "source-map-support": "^0.5.21",
     "typescript": "^4.4.4"
   },
   "nodemonConfig": {

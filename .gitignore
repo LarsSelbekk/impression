@@ -6,4 +6,6 @@ build/
 *.tsbuildinfo
 /.config.json
 venv/
+venvwsl/
 *.log
+__pycache__/

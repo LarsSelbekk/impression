@@ -1,40 +1,50 @@
+import datetime
 import sys
-from datetime import datetime
+from datetime import datetime as dtime
+from typing import Generator
 
 from dateutil import rrule
-from dateutil.relativedelta import relativedelta
 from recurrent import RecurringEvent
 
 
 def main():
-
     for line in sys.stdin:
-        repeat, due_date_iso, first_due_date_iso = line.split("\t")
-        due_date = datetime.fromisoformat(due_date_iso)
-        first_due_date = datetime.fromisoformat(first_due_date_iso)
-        # due_date = datetime.now()
-        # print("Due date:", due_date)
-        # print("First due date:", first_due_date)
-        r = RecurringEvent(due_date)
-        r.parse(repeat)
-        # print(r.get_params())
-        x: rrule.rrule = rrule.rrulestr(r.get_RFC_rrule(), dtstart=first_due_date)
-        # if first_due_date.day >= 28:
-        #     print(first_due_date, first_due_date+relativedelta(days=1))
-        #     if first_due_date.month != (first_due_date+relativedelta(days=1)).month:
-        #         x = x.replace(bymonthday=-1)
-                # x = x.replace(bymonthday=[28, 29, 30, 31], bysetpos=-1)
-            # elif first_due_date.month != (first_due_date+relativedelta(day=2)).month:
-            #     x = x.replace(bymonthday=-2)
-            # else:
-            #     x = x.replace(bymonthday=-3)
-        # print(x.)
-        # TODO: Should filter which ones will be created
-        # WARNING: Ignores recurrences which fall un non-existing dates. Somehow. It somehow handles "every X days", but "monthly" is ignored if the date of the month does not exist for that month.
-        sys.stdout.write("\n".join([str(i.date()) for i in x.xafter(due_date, count=5)]))
-        # print(recurrent.format(x))
-        # print(x.get_params())
+        repeats: str
+        repeats, due_date_iso, first_due_date_iso, count_str = line.split("\t")
+        count = int(count_str)
+        due_date = dtime.fromisoformat(due_date_iso)
+        first_due_date = dtime.fromisoformat(first_due_date_iso)
+
+        try:
+            next_date_gen = get_dates_generator(repeats, first_due_date, due_date)
+        except ValueError:
+            sys.stdout.write("MalformedRRule")
+            continue
+
+        if count == 0:
+            sys.stdout.write("\n".join([str(i.date()) for i in next_date_gen]))
+        else:
+            sys.stdout.write("\n".join([str(next(next_date_gen).date()) for _ in range(count)]))
+
     sys.stdout.close()
+
+
+def get_dates_generator(rrule_strings: str, first_due_date: dtime, due_date: dtime) -> Generator[dtime, None, None]:
+    rules = rrule.rruleset()
+    for rrule_string in rrule_strings.split("; "):
+        rule = RecurringEvent(first_due_date).parse(rrule_string)
+        if rule is None:
+            raise ValueError
+        elif isinstance(rule, dtime):
+            rules.rdate(rule)
+        elif isinstance(rule, str):
+            # WARNING: Ignores recurrences which fall un non-existing dates. Somehow. It somehow handles "every X days",
+            # but "monthly" is ignored if the date of the month does not exist for that month.
+            rules.rrule(rrule.rrulestr(rule))
+        else:
+            raise NotImplementedError
+
+    return rules.xafter(due_date, inc=True)
 
 
 if __name__ == "__main__":

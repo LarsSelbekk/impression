@@ -1,80 +1,102 @@
 import {Client} from "@notionhq/client"
 import {readFileSync} from "fs"
-import {execFile} from "child_process";
+import {execFile} from "child_process"
+import * as crypto from "crypto"
+import {parseAssignments, parseWildcards, sleep} from "./helper";
+import {clearAllOfRecurrenceSeries, clearExecute, generateEntry, getTextContent, queryAll, writeError} from "./notionApi";
 
-const DB = "4fa46ea34e9547ab8ae5427bf5978d01";
-
-interface Config {
+export interface Config {
     token: string,
+    databaseId: string,
+    pollInterval: number,
+    pythonPath?: string,
 }
+
+export const config = JSON.parse(readFileSync(".config.json", "utf-8")) as Config
+export const notion = new Client({
+    auth: config.token,
+})
+
+let finished = false
 
 main().then()
-interface Repeatable {
-    name: string,
-    repeat: string,
-    dueDate: string,
-    firstDueDate?: string,
-}
 
-async function main() {
-    const config = JSON.parse(readFileSync(".config.json", "utf-8")) as Config
-    const notion = new Client({
-        auth: config.token,
-    })
-    const repeatables = (await notion.databases.query({database_id: DB}))
-        .results
-        .filter(
-            r => Object.keys(r.properties).includes("Repeat")
-        )
-        .map(
-            r => ({
-                // @ts-ignore
-                name: r.properties["Name"].title[0]?.text.content,
-                // @ts-ignore
-                repeat: r.properties["Repeat"].rich_text[0]?.plain_text,
-                // @ts-ignore
-                dueDate: r.properties["Due date"].date?.start,
-                // @ts-ignore
-                firstDueDate: r.properties["First due date"].date?.start,
-            }))
-        .filter(r => r.repeat !== undefined)
-    // TODO: If repeat and "Due date" but no "First due date", latter := former
-    console.log(repeatables)
-    const dateHandler = execFile("python", ["main.py"], onReceive(repeatables, notion))
-    // dateHandler.stdin?.write(repeatables[0].repeat + "\t" + repeatables[0].dueDate + "\t" + repeatables[0].firstDueDate)
-    dateHandler.stdin?.write(`every 3 days` + "\t" + `2020-02-25` + "\t" + `2020-02-26`)
-    dateHandler.stdin?.end()
-}
-
-const onReceive = (repeatables: Repeatable[], notion: Client) => (error: unknown | null, stdout: string, stderr: string) => {
-    console.log("===stdout===")
-    console.log(stdout)
-    console.log("===stdout===")
-
-    const generate = false
-
-    if (error !== null) {
-        console.error(error)
-        if (stderr.length > 0) {
-            console.error(stderr)
+async function main(): Promise<void> {
+    if (!config.token || !config.databaseId || !config.pollInterval) {
+        console.error("Missing environment variables")
+        process.exit(1)
+    }
+    while (!finished) {
+        try {
+            await doLoop()
+        } catch (e) {
+            console.error(e)
         }
-    } else if (generate) {
-        for (const line of stdout.split("\n")) {
-            notion.pages.create({
-                parent: {
-                    database_id: DB
-                },
-                properties: {
-                    "Name": {title: [{text: {content: repeatables[0].name,}}]},
-                    "Due date": {
-                        date: {
-                            start: line.trim(),
-                            end: null,
-                        }
-                    },
-                    // "Repeat": { title: [ { text: { content: "", } } ] },
-                }
-            })
-        }
+        await sleep(config.pollInterval)
     }
 }
+
+async function doLoop(): Promise<void> {
+    const repeatables = (await queryAll(notion.databases.query, {database_id: config.databaseId}))
+        .filter(
+            // @ts-ignore
+            r => r.properties["Execute"].checkbox
+        )
+        // @ts-ignore
+        .filter(r => getTextContent(r, "Repeat") !== undefined)
+    const waitingOn = []
+    // TODO: concurrent
+    for (const repeatable of repeatables) {
+        const newRecurrenceId = crypto.randomUUID()
+        await clearExecute(repeatable, newRecurrenceId)
+        waitingOn.push(clearAllOfRecurrenceSeries(getTextContent(repeatable, "Recurrence ID")))
+        // @ts-ignore
+        const repeat = getTextContent(repeatable, "Repeat")
+        const assignments = parseAssignments(getTextContent(repeatable, "Assignments"))
+
+        // @ts-ignore
+        const titleTemplate = parseWildcards(repeatable.properties["Name"].title[0].plain_text)
+        // TODO: num params vs args checking. num assignments vs num repeats
+        // TODO: alarm
+        if (assignments == null || titleTemplate.length-1 !== ((assignments[0] ?? []).length)) {
+            waitingOn.push(writeError(repeatable, "Assignments", `Should fill ${titleTemplate.length-1} variables`))
+        } else {
+            let errored = false
+            const onReceive = (error: unknown | null, stdout: string, stderr: string) => {
+                if (stderr.length > 0) {
+                    errored = true
+                    console.error("From python:\n" + stderr)
+                }
+                if (errored) return
+                if (stdout.length == 0) return
+                const dates = stdout.split("\n")
+                if (stdout.includes("MalformedRRule")) {
+                    waitingOn.push(writeError(repeatable, "Repeat"))
+                    errored = true
+                    return
+                }
+                if (titleTemplate.length > 1 && dates.length !== assignments.length) {
+                    waitingOn.push(writeError(repeatable, "Assignments", `Should fill ${dates.length} dates`))
+                    errored = true
+                    return
+                }
+                for (let i = 0; i < dates.length; i++) {
+                    waitingOn.push(generateEntry(
+                        repeatable,
+                        dates[i].trim(),
+                        newRecurrenceId,
+                        titleTemplate,
+                        assignments[i] ?? []
+                    ))
+                }
+            }
+            const dateHandler = execFile(config.pythonPath ?? "python", ["main.py"], onReceive)
+            // TODO parse dates from properties/time
+            // Due dates temporarily set to arbitrary date in the past to generate all; could parse Due date-property later
+            dateHandler.stdin?.write(repeat + "\t" + `2020-02-25` + "\t" + `2020-02-26` + "\t" + `0`)
+            dateHandler.stdin?.end()
+        }
+    }
+    await Promise.all(waitingOn)
+}
+
