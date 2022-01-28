@@ -37,13 +37,6 @@ export async function generateEntry(generator: any, dueDate: string, newRecurren
                     end: null,
                 }
             },
-            "Execute": {
-                checkbox: false
-            },
-            "Discarded": {
-                checkbox: false
-            },
-            "Repeat": {rich_text: []},
             "Recurrence ID": {rich_text: [{type: "text", text: {content: newRecurrenceId}}]}
         },
         icon: generator.icon,
@@ -53,10 +46,11 @@ export async function generateEntry(generator: any, dueDate: string, newRecurren
 
 function filterProperties(properties: any): any {
     const forbiddenTypes = ["formula"]
+    const forbiddenFields = ["Assignments", "Repeat", "Date Created", "Execute"]
     const ret: any = {}
     for (const key of Object.keys(properties)) {
         const val = properties[key]
-        if (!forbiddenTypes.includes(val.type) && key !== "Date Created") {
+        if (!forbiddenTypes.includes(val.type) && !forbiddenFields.includes(key)) {
             ret[key] = {
                 type: val.type,
                 [val.type]: val[val.type]
