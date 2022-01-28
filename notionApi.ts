@@ -93,6 +93,9 @@ export async function clearExecute(repeatable: any, newId: string): Promise<void
 }
 
 export async function clearAllOfRecurrenceSeries(id: string): Promise<void> {
+    if (!id || !id.trim()) {
+        return
+    }
     const results = await queryAll(notion.databases.query, {
         database_id: config.databaseId, filter:
             {

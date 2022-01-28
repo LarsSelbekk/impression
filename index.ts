@@ -87,4 +87,3 @@ async function doLoop(): Promise<void> {
     }
     await Promise.all(waitingOn)
 }
-
