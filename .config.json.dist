@@ -1,0 +1,6 @@
+{
+  "token": "",
+  "databaseId": "",
+  "pollInterval": 5000,
+  "pythonPath": "python"
+}

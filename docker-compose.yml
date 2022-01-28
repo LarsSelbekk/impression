@@ -2,6 +2,7 @@ services:
   impression:
     build: .
     container_name: impression
+    env_file: .env
     logging:
       options:
         max-size:

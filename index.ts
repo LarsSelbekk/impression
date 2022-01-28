@@ -1,18 +1,10 @@
 import {Client} from "@notionhq/client"
-import {readFileSync} from "fs"
 import {execFile} from "child_process"
 import * as crypto from "crypto"
-import {parseAssignments, parseWildcards, sleep} from "./helper";
+import {parseAssignments, parseWildcards, readConfig, sleep} from "./helper";
 import {clearAllOfRecurrenceSeries, clearExecute, generateEntry, getTextContent, queryAll, writeError} from "./notionApi";
 
-export interface Config {
-    token: string,
-    databaseId: string,
-    pollInterval: number,
-    pythonPath?: string,
-}
-
-export const config = JSON.parse(readFileSync(".config.json", "utf-8")) as Config
+export const config = readConfig()
 export const notion = new Client({
     auth: config.token,
 })
@@ -22,10 +14,6 @@ let finished = false
 main().then()
 
 async function main(): Promise<void> {
-    if (!config.token || !config.databaseId || !config.pollInterval) {
-        console.error("Missing environment variables")
-        process.exit(1)
-    }
     while (!finished) {
         try {
             await doLoop()

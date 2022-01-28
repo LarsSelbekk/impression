@@ -11,3 +11,6 @@ __pycache__/
 *.tsbuildinfo
 docker-compose.yml
 Dockerfile
+.env
+.env.dist
+.config.json.dist
