@@ -1,0 +1,13 @@
+.git/
+venv/
+venvwsl/
+node_modules/
+__pycache__/
+.idea/
+.gitignore
+*.js
+*.map
+*.log
+*.tsbuildinfo
+docker-compose.yml
+Dockerfile

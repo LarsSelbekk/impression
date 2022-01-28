@@ -1,0 +1,8 @@
+services:
+  impression:
+    build: .
+    container_name: impression
+    logging:
+      options:
+        max-size:
+          "1m"
