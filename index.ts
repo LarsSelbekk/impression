@@ -2,7 +2,15 @@ import {Client} from "@notionhq/client"
 import {execFile} from "child_process"
 import * as crypto from "crypto"
 import {parseAssignments, parseWildcards, readConfig, sleep} from "./helper";
-import {clearAllOfRecurrenceSeries, clearExecute, generateEntry, getTextContent, queryAll, writeError} from "./notionApi";
+import {
+    clearAllOfRecurrenceSeries,
+    clearExecute,
+    generateEntry,
+    getChildDuplicator,
+    getTextContent,
+    queryAll,
+    writeError
+} from "./notionApi";
 
 export const config = readConfig()
 export const notion = new Client({
@@ -18,7 +26,7 @@ async function main(): Promise<void> {
         try {
             await doLoop()
         } catch (e) {
-            console.error(e)
+            console.error("Loop failed", e)
         }
         await sleep(config.pollInterval)
     }
@@ -50,6 +58,9 @@ async function doLoop(): Promise<void> {
             waitingOn.push(writeError(repeatable, "Assignments", `Should fill ${titleTemplate.length-1} variables`))
         } else {
             let errored = false
+            const childDuplicator = await getChildDuplicator(repeatable)
+            // @ts-ignore
+            // const children = await getChildren(repeatable)
             const onReceive = (error: unknown | null, stdout: string, stderr: string) => {
                 if (stderr.length > 0) {
                     errored = true
@@ -74,7 +85,9 @@ async function doLoop(): Promise<void> {
                         dates[i].trim(),
                         newRecurrenceId,
                         titleTemplate,
-                        assignments[i] ?? []
+                        assignments[i] ?? [],
+                        childDuplicator
+                        // children
                     ))
                 }
             }
