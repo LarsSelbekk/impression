@@ -6,9 +6,9 @@ import {
     clearAllOfRecurrenceSeries,
     clearExecute,
     generateEntry,
-    getChildDuplicator,
     getTextContent, letQueueEmpty,
     queryAll,
+    getChildren,
     writeError
 } from "./notionApi";
 
@@ -60,9 +60,8 @@ async function doLoop(): Promise<void> {
             await writeError(repeatable, "Assignments", `Should fill ${titleTemplate.length-1} variables`)
         } else {
             let errored = false
-            const childDuplicator = await getChildDuplicator(repeatable)
             // @ts-ignore
-            // const children = await getChildren(repeatable)
+            const children = await getChildren(repeatable)
             const onReceive = async (error: unknown | null, stdout: string, stderr: string) => {
                 if (stderr.length > 0) {
                     errored = true
@@ -88,8 +87,7 @@ async function doLoop(): Promise<void> {
                         newRecurrenceId,
                         titleTemplate,
                         assignments[i] ?? [],
-                        childDuplicator
-                        // children
+                        children
                     )
                 }
             }

@@ -29,7 +29,7 @@ export function getTextContent(page: any, property: string): string {
 
 export async function generateEntry(generator: any, dueDate: string, newRecurrenceId: string,
                                     titleTemplate: string[], assignments: string[],
-                                    childDuplicator: (child_id: string) => Promise<boolean>) {
+                                    children?: Block[]) {
     // TODO: Variables in description
     const formattedTitle = formatTemplate(titleTemplate, assignments)
     const res = await queue.push(notion.pages.create, {
@@ -49,8 +49,8 @@ export async function generateEntry(generator: any, dueDate: string, newRecurren
         },
         icon: generator.icon,
         cover: generator.cover,
+        children
     })
-    await childDuplicator(res.id)
 }
 
 function filterProperties(properties: any): any {
@@ -122,27 +122,6 @@ export async function clearAllOfRecurrenceSeries(id: string): Promise<void> {
 export async function queryAll<T>(call: (obj: any) => Promise<RequestResponse<T>>, args: object)
     : Promise<T[]> {
     return await queue.push(call, args, true)
-}
-
-export async function getChildDuplicator(generator: any)
-    : Promise<(child_id: string) => Promise<boolean>> {
-    const children = await getChildren(generator)
-    if (children === undefined) {
-        return async () => true
-    }
-    return async (child_id: string) => {
-        try {
-            await queue.push(notion.blocks.children.append, {
-                block_id: child_id,
-                // @ts-ignore
-                children
-            })
-            return true
-        } catch (e) {
-            console.error(`Failed to create children for ${child_id}:`, e)
-        }
-        return false
-    }
 }
 
 // TODO: Doesn't work with tables
