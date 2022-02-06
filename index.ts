@@ -7,7 +7,7 @@ import {
     clearExecute,
     generateEntry,
     getChildDuplicator,
-    getTextContent,
+    getTextContent, letQueueEmpty,
     queryAll,
     writeError
 } from "./notionApi";
@@ -24,10 +24,12 @@ main().then()
 async function main(): Promise<void> {
     while (!finished) {
         try {
+            console.debug("Looping")
             await doLoop()
         } catch (e) {
             console.error("Loop failed", e)
         }
+        await letQueueEmpty()
         await sleep(config.pollInterval)
     }
 }
@@ -40,12 +42,12 @@ async function doLoop(): Promise<void> {
         )
         // @ts-ignore
         .filter(r => getTextContent(r, "Repeat") !== undefined)
-    const waitingOn = []
     // TODO: concurrent
+    console.debug(repeatables)
     for (const repeatable of repeatables) {
         const newRecurrenceId = crypto.randomUUID()
         await clearExecute(repeatable, newRecurrenceId)
-        waitingOn.push(clearAllOfRecurrenceSeries(getTextContent(repeatable, "Recurrence ID")))
+        await clearAllOfRecurrenceSeries(getTextContent(repeatable, "Recurrence ID"))
         // @ts-ignore
         const repeat = getTextContent(repeatable, "Repeat")
         const assignments = parseAssignments(getTextContent(repeatable, "Assignments"))
@@ -55,13 +57,13 @@ async function doLoop(): Promise<void> {
         // TODO: num params vs args checking. num assignments vs num repeats
         // TODO: alarm
         if (assignments == null || titleTemplate.length-1 !== ((assignments[0] ?? []).length)) {
-            waitingOn.push(writeError(repeatable, "Assignments", `Should fill ${titleTemplate.length-1} variables`))
+            await writeError(repeatable, "Assignments", `Should fill ${titleTemplate.length-1} variables`)
         } else {
             let errored = false
             const childDuplicator = await getChildDuplicator(repeatable)
             // @ts-ignore
             // const children = await getChildren(repeatable)
-            const onReceive = (error: unknown | null, stdout: string, stderr: string) => {
+            const onReceive = async (error: unknown | null, stdout: string, stderr: string) => {
                 if (stderr.length > 0) {
                     errored = true
                     console.error("From python:\n" + stderr)
@@ -70,17 +72,17 @@ async function doLoop(): Promise<void> {
                 if (stdout.length == 0) return
                 const dates = stdout.split("\n")
                 if (stdout.includes("MalformedRRule")) {
-                    waitingOn.push(writeError(repeatable, "Repeat"))
+                    await writeError(repeatable, "Repeat")
                     errored = true
                     return
                 }
                 if (titleTemplate.length > 1 && dates.length !== assignments.length) {
-                    waitingOn.push(writeError(repeatable, "Assignments", `Should fill ${dates.length} dates`))
+                    await writeError(repeatable, "Assignments", `Should fill ${dates.length} dates`)
                     errored = true
                     return
                 }
                 for (let i = 0; i < dates.length; i++) {
-                    waitingOn.push(generateEntry(
+                    await generateEntry(
                         repeatable,
                         dates[i].trim(),
                         newRecurrenceId,
@@ -88,7 +90,7 @@ async function doLoop(): Promise<void> {
                         assignments[i] ?? [],
                         childDuplicator
                         // children
-                    ))
+                    )
                 }
             }
             const dateHandler = execFile(config.pythonPath ?? "python", ["main.py"], onReceive)
@@ -98,5 +100,4 @@ async function doLoop(): Promise<void> {
             dateHandler.stdin?.end()
         }
     }
-    await Promise.all(waitingOn)
 }

@@ -1,8 +1,12 @@
 import {formatTemplate} from "./helper";
 import {config, notion} from "./index";
+import {RequestQueue} from "./requestQueue";
 
 type Block = {id: string, type: string, has_children?: boolean, children?: Block[], [str: string]: any}
 type RequestResponse<T> = { results: T[], has_more: boolean, next_cursor: any }
+
+const REQUEST_INTERVAL = 500
+const queue = new RequestQueue(REQUEST_INTERVAL)
 
 function redErrorTextBlock(message?: string) {
     return {
@@ -28,7 +32,7 @@ export async function generateEntry(generator: any, dueDate: string, newRecurren
                                     childDuplicator: (child_id: string) => Promise<boolean>) {
     // TODO: Variables in description
     const formattedTitle = formatTemplate(titleTemplate, assignments)
-    const res = await notion.pages.create({
+    const res = await queue.push(notion.pages.create, {
         parent: {
             database_id: config.databaseId
         },
@@ -67,7 +71,7 @@ function filterProperties(properties: any): any {
 }
 
 export async function writeError(repeatable: any, field: string, message: string = ""): Promise<void> {
-    await notion.pages.update({
+    await queue.push(notion.pages.update, {
         page_id: repeatable.id, properties: {
             [field]: {
                 ...repeatable.properties[field],
@@ -81,7 +85,7 @@ export async function writeError(repeatable: any, field: string, message: string
 }
 
 export async function clearExecute(repeatable: any, newId: string): Promise<void> {
-    await notion.pages.update({
+    await queue.push(notion.pages.update, {
         page_id: repeatable.id, properties: {
             "Execute": {
                 checkbox: false
@@ -94,10 +98,11 @@ export async function clearExecute(repeatable: any, newId: string): Promise<void
 }
 
 export async function clearAllOfRecurrenceSeries(id: string): Promise<void> {
+    console.debug("Clearing all of id " + id)
     if (!id || !id.trim()) {
         return
     }
-    const results = await queryAll(notion.databases.query, {
+    const results = await queue.push(notion.databases.query, {
         database_id: config.databaseId, filter:
             {
                 and: [
@@ -105,30 +110,18 @@ export async function clearAllOfRecurrenceSeries(id: string): Promise<void> {
                     {property: "Repeat", text: {is_empty: true}}
                 ]
             }
-    })
-    const waitingOn = []
+    }, true)
     for (const result of results) {
-        waitingOn.push(notion.pages.update({
+        await queue.push(notion.pages.update, {
             page_id: result.id,
             archived: true
-        }))
+        })
     }
-    await Promise.all(waitingOn)
 }
 
 export async function queryAll<T>(call: (obj: any) => Promise<RequestResponse<T>>, args: object)
     : Promise<T[]> {
-    let results: T[] = []
-    let prev_cursor: any = undefined
-    while (true) {
-        const res = await call({...args, next_cursor: prev_cursor})
-        results = results.concat(res.results)
-        if (!res.has_more) {
-            break
-        }
-        prev_cursor = res.next_cursor
-    }
-    return results
+    return await queue.push(call, args, true)
 }
 
 export async function getChildDuplicator(generator: any)
@@ -139,7 +132,7 @@ export async function getChildDuplicator(generator: any)
     }
     return async (child_id: string) => {
         try {
-            await notion.blocks.children.append({
+            await queue.push(notion.blocks.children.append, {
                 block_id: child_id,
                 // @ts-ignore
                 children
@@ -181,4 +174,8 @@ export async function getChildren(parent: Block): Promise<Block[] | undefined> {
     // TODO: Just ignores children for now
     const children = directChildren.filter(child => !child.has_children)
     return children.length > 0 ? children : undefined
+}
+
+export function letQueueEmpty(): Promise<void> {
+    return queue.letQueueEmpty()
 }
