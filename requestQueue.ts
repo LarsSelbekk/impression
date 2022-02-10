@@ -31,7 +31,6 @@ export class RequestQueue {
                 reject,
             })
         })
-        console.debug("Enqueueing", request)
         if (!this.looping && !this.paused) {
             this.loop().then()
         }
@@ -53,25 +52,28 @@ export class RequestQueue {
             const toSleep = sleep(nextInterval)
             if (!this.isEmpty()) {
                 const next = this.queue[0]
+                console.debug("Executing", next.request)
 
                 try {
-                    let res;
-                    res = await next.request(next.args)
+                    let nextResult = await next.request(next.args)
+                    console.debug("Received first result")
                     if (next.isPaginated) {
-                        let results = res.results
-                        while (res.has_more) {
-                            res = await next.request({
+                        let sumResults = nextResult.results
+                        while (nextResult.has_more) {
+                            nextResult = await next.request({
                                 ...(next.args ?? {}),
-                                next_cursor: res.next_cursor
+                                start_cursor: nextResult.next_cursor
                             })
-                            results = results.concat(res.results)
+                            console.debug("Received more")
+                            sumResults = sumResults.concat(nextResult.results)
                         }
-                        next.resolve(results)
+                        next.resolve(sumResults)
                     } else {
-                        next.resolve(res)
+                        next.resolve(nextResult)
                     }
+                    console.debug("Done")
                 } catch (e) {
-                    console.error("Failed queue item", e)
+                    console.error("Failed queue item: ", next, "\nError:\n", e)
                     next.reject(new QueueError(e))
                 }
                 this.queue.shift()
