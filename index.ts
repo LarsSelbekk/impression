@@ -75,6 +75,11 @@ async function doLoop(): Promise<void> {
                     errored = true
                     return
                 }
+                if (stdout.includes("NonExistantDate")) {
+                    await writeError(repeatable, "Repeat", "Non-existant date")
+                    errored = true
+                    return
+                }
                 if (titleTemplate.length > 1 && dates.length !== assignments.length) {
                     await writeError(repeatable, "Assignments", `Should fill ${dates.length} dates`)
                     errored = true

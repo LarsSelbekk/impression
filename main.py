@@ -17,6 +17,9 @@ def main():
 
         try:
             next_date_gen = get_dates_generator(repeats, first_due_date, due_date)
+        except NonExistantDateError:
+            sys.stdout.write("NonExistantDate")
+            continue
         except ValueError:
             sys.stdout.write("MalformedRRule")
             continue
@@ -32,7 +35,12 @@ def main():
 def get_dates_generator(rrule_strings: str, first_due_date: dtime, due_date: dtime) -> Generator[dtime, None, None]:
     rules = rrule.rruleset()
     for rrule_string in rrule_strings.split("; "):
-        rule = RecurringEvent(first_due_date).parse(rrule_string)
+        recurring = RecurringEvent(first_due_date)
+        try:
+            rule = recurring.parse(rrule_string)
+        except TypeError:
+            raise NonExistantDateError
+
         if rule is None:
             raise ValueError
         elif isinstance(rule, dtime):
@@ -45,6 +53,10 @@ def get_dates_generator(rrule_strings: str, first_due_date: dtime, due_date: dti
             raise NotImplementedError
 
     return rules.xafter(due_date, inc=True)
+
+
+class NonExistantDateError(ValueError):
+    pass
 
 
 if __name__ == "__main__":
