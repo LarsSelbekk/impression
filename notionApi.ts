@@ -55,7 +55,8 @@ export async function generateEntry(generator: any, dueDate: string, newRecurren
 
 function filterProperties(properties: any): any {
     const forbiddenTypes = ["formula"]
-    const forbiddenFields = ["Assignments", "Repeat", "Date Created", "Execute"]
+    const forbiddenFields = ["Assignments", "Repeat", "Date Created", "Execute", "Last edited"
+    + " time", "Last edited by", "ID", "Created by"]
     const ret: any = {}
     for (const key of Object.keys(properties)) {
         const val = properties[key]
@@ -151,7 +152,9 @@ export async function getChildren(parent: Block): Promise<Block[] | undefined> {
     })
     // const children = (await Promise.all(directChildren.map(populateChildren)))
     // TODO: Just ignores children for now
+    // @ts-ignore
     const children = directChildren.filter(child => !child.has_children)
+    // @ts-ignore
     return children.length > 0 ? children : undefined
 }
 
